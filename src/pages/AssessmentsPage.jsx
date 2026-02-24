@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { ClipboardCheck, Briefcase, FileText, Building, Clock, ArrowLeft, CheckCircle2, Copy, Download, AlertTriangle } from 'lucide-react'
+import { ClipboardCheck, Briefcase, FileText, Building, Clock, ArrowLeft, CheckCircle2, Copy, Download, AlertTriangle, AlertCircle } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 import { CircularProgress } from '../components/CircularProgress'
 import { analyzeJD } from '../utils/analyzer'
@@ -16,27 +16,44 @@ export default function AssessmentsPage() {
     const [history, setHistory] = useState([])
     const [currentResult, setCurrentResult] = useState(null)
     const [error, setError] = useState('')
+    const [warning, setWarning] = useState('')
 
     // Load history on mount
     useEffect(() => {
         const saved = localStorage.getItem('jd_analyzer_history')
         if (saved) {
             try {
-                setHistory(JSON.parse(saved))
+                const parsed = JSON.parse(saved)
+                // Filter corrupted entries based on Strict Schema rules
+                const validHistory = parsed.filter(item => {
+                    return item.id && item.createdAt && item.jdText && item.extractedSkills && item.roundMapping && Array.isArray(item.checklist) && Array.isArray(item.plan7Days) && Array.isArray(item.questions) && item.baseScore !== undefined && item.skillConfidenceMap && item.finalScore !== undefined && item.updatedAt;
+                });
+
+                if (validHistory.length < parsed.length) {
+                    alert("One saved entry couldn't be loaded. Create a new analysis.");
+                }
+                setHistory(validHistory)
             } catch (e) {
                 console.error('Failed to parse history', e)
+                setHistory([])
             }
         }
     }, [])
 
     const handleAnalyze = () => {
         if (!jdText.trim()) {
-            setError('Job Description text is required.')
+            setError('Please paste a job description to analyze.')
             return
         }
         setError('')
 
-        // analyzeJD returns baseScore, skillConfidenceMap (default 'practice'), and initial readinessScore
+        if (jdText.trim().length < 200) {
+            setWarning('This JD is too short to analyze deeply. Paste full JD for better output.')
+        } else {
+            setWarning('')
+        }
+
+        // analyzeJD returns baseScore, skillConfidenceMap (default 'practice'), and finalScore
         const result = analyzeJD(company, role, jdText)
 
         const newHistory = [result, ...history]
@@ -54,6 +71,7 @@ export default function AssessmentsPage() {
 
     const viewHistoryItem = (item) => {
         setCurrentResult(item)
+        setWarning('') // Clear active warning when viewing old history
         setActiveTab('results')
     }
 
@@ -71,13 +89,15 @@ export default function AssessmentsPage() {
             else practiceCount++;
         });
 
+        // Score Stability logic
         let newScore = currentResult.baseScore + (knowCount * 2) - (practiceCount * 2);
         newScore = Math.max(0, Math.min(100, newScore));
 
         const updatedResult = {
             ...currentResult,
             skillConfidenceMap: newMap,
-            readinessScore: newScore
+            finalScore: newScore,
+            updatedAt: new Date().toISOString()
         };
 
         setCurrentResult(updatedResult);
@@ -89,14 +109,14 @@ export default function AssessmentsPage() {
 
     // --- Export Handlers ---
     const handleCopyPlan = () => {
-        const text = currentResult.plan.map(p => `${p.day}: ${p.title}\n${p.desc}`).join('\n\n');
+        const text = currentResult.plan7Days.map(p => `${p.day}: ${p.focus}\n${p.tasks.join('\n')}`).join('\n\n');
         navigator.clipboard.writeText(text);
         alert('7-Day Plan Copied!');
     }
 
     const handleCopyChecklist = () => {
-        const text = Object.entries(currentResult.checklist).map(([round, items]) => {
-            return `${round}\n${items.map(i => `- ${i}`).join('\n')}`
+        const text = currentResult.checklist.map(rd => {
+            return `${rd.roundTitle}\n${rd.items.map(i => `- ${i}`).join('\n')}`
         }).join('\n\n');
         navigator.clipboard.writeText(text);
         alert('Checklist Copied!');
@@ -109,7 +129,7 @@ export default function AssessmentsPage() {
     }
 
     const handleDownloadTxt = () => {
-        let text = `Role: ${currentResult.role}\nCompany: ${currentResult.company}\nScore: ${currentResult.readinessScore}/100\n\n`;
+        let text = `Role: ${currentResult.role || "Not specified"}\nCompany: ${currentResult.company || "Not specified"}\nScore: ${currentResult.finalScore}/100\n\n`;
 
         if (currentResult.companyIntel) {
             text += `\n=== COMPANY INTEL ===\n`;
@@ -120,24 +140,26 @@ export default function AssessmentsPage() {
 
         text += `\n=== EXTRACTED SKILLS ===\n`;
         Object.entries(currentResult.extractedSkills).forEach(([cat, skills]) => {
-            text += `${cat}: ${skills.join(', ')}\n`;
+            if (skills.length > 0) {
+                text += `${cat}: ${skills.join(', ')}\n`;
+            }
         });
 
         if (currentResult.roundMapping) {
             text += `\n=== DYNAMIC ROUND MAPPING ===\n`;
             currentResult.roundMapping.forEach(rd => {
-                text += `${rd.title} - ${rd.desc}\nWhy this round matters: ${rd.why}\n\n`;
+                text += `${rd.roundTitle} - ${rd.focusAreas.join(', ')}\nWhy this round matters: ${rd.whyItMatters}\n\n`;
             });
         }
 
         text += `\n=== STANDARD ROUND CHECKLIST ===\n`;
-        Object.entries(currentResult.checklist).forEach(([round, items]) => {
-            text += `${round}\n${items.map(i => `- ${i}`).join('\n')}\n\n`;
+        currentResult.checklist.forEach(rd => {
+            text += `${rd.roundTitle}\n${rd.items.map(i => `- ${i}`).join('\n')}\n\n`;
         });
 
         text += `=== 7-DAY PLAN ===\n`;
-        currentResult.plan.forEach(p => {
-            text += `${p.day}: ${p.title}\n${p.desc}\n\n`;
+        currentResult.plan7Days.forEach(p => {
+            text += `${p.day}: ${p.focus}\n${p.tasks.join(', ')}\n\n`;
         });
 
         text += `=== 10 INTERVIEW QUESTIONS ===\n`;
@@ -149,7 +171,7 @@ export default function AssessmentsPage() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `KodNest_Prep_${currentResult.company.replace(/\s+/g, '_')}_${currentResult.role.replace(/\s+/g, '_')}.txt`;
+        a.download = `KodNest_Prep_${currentResult.company.replace(/\s+/g, '_') || "Unknown"}_${currentResult.role.replace(/\s+/g, '_') || "Unknown"}.txt`;
         a.click();
         URL.revokeObjectURL(url);
     }
@@ -215,6 +237,16 @@ export default function AssessmentsPage() {
             .slice(0, 3);
     }
 
+    const catDisplay = {
+        coreCS: "Core CS",
+        languages: "Languages",
+        web: "Web",
+        data: "Data",
+        cloud: "Cloud/DevOps",
+        testing: "Testing",
+        other: "Other"
+    };
+
     return (
         <div style={{ paddingBottom: 'var(--space-xl)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', marginBottom: 'var(--space-md)' }}>
@@ -263,7 +295,7 @@ export default function AssessmentsPage() {
                                 </label>
                                 <textarea style={{ ...inputStyle, minHeight: '200px', resize: 'vertical' }} placeholder="Paste the full job description here..." value={jdText} onChange={(e) => setJdText(e.target.value)} />
                             </div>
-                            {error && <p style={{ color: 'var(--color-accent)', marginBottom: 'var(--space-sm)' }}>{error}</p>}
+                            {error && <p style={{ color: '#ef4444', marginBottom: 'var(--space-sm)', fontWeight: 600 }}>{error}</p>}
                             <button style={btnPrimary} onClick={handleAnalyze} onMouseEnter={(e) => e.target.style.opacity = '0.9'} onMouseLeave={(e) => e.target.style.opacity = '1'}>
                                 Analyze JD
                             </button>
@@ -282,12 +314,12 @@ export default function AssessmentsPage() {
                             {history.map((item) => (
                                 <div key={item.id} onClick={() => viewHistoryItem(item)} style={{ padding: 'var(--space-md)', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <div>
-                                        <h3 style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, margin: '0 0 4px 0' }}>{item.role} @ {item.company}</h3>
+                                        <h3 style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, margin: '0 0 4px 0' }}>{item.role || "Unknown Role"} @ {item.company || "Unknown Company"}</h3>
                                         <p style={{ margin: 0, color: 'var(--color-muted)', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                            <Clock size={14} /> {new Date(item.createdAt).toLocaleDateString()}
+                                            <Clock size={14} /> {new Date(item.updatedAt || item.createdAt).toLocaleDateString()}
                                         </p>
                                     </div>
-                                    <div style={{ fontWeight: 600, color: 'var(--color-primary, var(--color-accent))' }}>Score: {item.readinessScore}</div>
+                                    <div style={{ fontWeight: 600, color: 'var(--color-primary, var(--color-accent))' }}>Score: {item.finalScore}</div>
                                 </div>
                             ))}
                         </div>
@@ -302,14 +334,21 @@ export default function AssessmentsPage() {
                         <ArrowLeft size={18} /> Back to History
                     </button>
 
+                    {warning && (
+                        <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', padding: 'var(--space-md)', borderRadius: 'var(--radius)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 'var(--space-lg)' }}>
+                            <AlertCircle size={20} />
+                            <span style={{ fontWeight: 500 }}>{warning}</span>
+                        </div>
+                    )}
+
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
                         <Card>
                             <CardHeader>
                                 <CardTitle>Analysis Summary</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <p style={{ margin: '0 0 8px 0' }}><strong>Role:</strong> {currentResult.role}</p>
-                                <p style={{ margin: '0 0 8px 0' }}><strong>Company:</strong> {currentResult.company}</p>
+                                <p style={{ margin: '0 0 8px 0' }}><strong>Role:</strong> {currentResult.role || "Not specified"}</p>
+                                <p style={{ margin: '0 0 8px 0' }}><strong>Company:</strong> {currentResult.company || "Not specified"}</p>
                                 <p style={{ margin: '0 0 0 0', color: 'var(--color-muted)', fontSize: 'var(--text-sm)' }}>
                                     Analyzed on {new Date(currentResult.createdAt).toLocaleString()}
                                 </p>
@@ -321,7 +360,7 @@ export default function AssessmentsPage() {
                                 <CardTitle>Live JD Breakdown Score</CardTitle>
                             </CardHeader>
                             <CardContent style={{ display: 'flex', justifyContent: 'center' }}>
-                                <CircularProgress score={currentResult.readinessScore} />
+                                <CircularProgress score={currentResult.finalScore} />
                             </CardContent>
                         </Card>
                     </div>
@@ -363,53 +402,55 @@ export default function AssessmentsPage() {
                         </CardHeader>
                         <CardContent>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-                                {Object.entries(currentResult.extractedSkills).map(([cat, skills]) => (
-                                    <div key={cat}>
-                                        <h4 style={{ fontWeight: 600, marginBottom: '8px', color: 'var(--color-muted)' }}>{cat}</h4>
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-                                            {skills.map(skill => {
-                                                const isKnow = currentResult.skillConfidenceMap?.[skill] === 'know';
-                                                return (
-                                                    <div
-                                                        key={skill}
-                                                        style={{
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            gap: '12px',
-                                                            padding: '8px 12px',
-                                                            border: '1px solid var(--color-border-light)',
-                                                            borderRadius: 'var(--radius)',
-                                                            backgroundColor: 'white'
-                                                        }}
-                                                    >
-                                                        <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text)' }}>
-                                                            {skill}
-                                                        </span>
-                                                        <div style={{ display: 'flex', gap: '4px' }}>
-                                                            <button
-                                                                onClick={() => handleToggleSkill(skill)}
-                                                                style={{
-                                                                    border: '1px solid',
-                                                                    borderColor: isKnow ? 'var(--color-success)' : 'var(--color-border)',
-                                                                    backgroundColor: isKnow ? 'var(--color-success)' : 'transparent',
-                                                                    color: isKnow ? '#FFF' : 'var(--color-muted)',
-                                                                    padding: '4px 10px',
-                                                                    borderRadius: '12px',
-                                                                    fontSize: 'var(--text-xs)',
-                                                                    cursor: 'pointer',
-                                                                    fontWeight: 600,
-                                                                    transition: 'all var(--transition)'
-                                                                }}
-                                                            >
-                                                                {isKnow ? "I know this" : "Need practice"}
-                                                            </button>
+                                {Object.entries(currentResult.extractedSkills)
+                                    .filter(([_, skills]) => skills.length > 0)
+                                    .map(([cat, skills]) => (
+                                        <div key={cat}>
+                                            <h4 style={{ fontWeight: 600, marginBottom: '8px', color: 'var(--color-muted)' }}>{catDisplay[cat] || cat}</h4>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                                                {skills.map(skill => {
+                                                    const isKnow = currentResult.skillConfidenceMap?.[skill] === 'know';
+                                                    return (
+                                                        <div
+                                                            key={skill}
+                                                            style={{
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '12px',
+                                                                padding: '8px 12px',
+                                                                border: '1px solid var(--color-border-light)',
+                                                                borderRadius: 'var(--radius)',
+                                                                backgroundColor: 'white'
+                                                            }}
+                                                        >
+                                                            <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text)' }}>
+                                                                {skill}
+                                                            </span>
+                                                            <div style={{ display: 'flex', gap: '4px' }}>
+                                                                <button
+                                                                    onClick={() => handleToggleSkill(skill)}
+                                                                    style={{
+                                                                        border: '1px solid',
+                                                                        borderColor: isKnow ? 'var(--color-success)' : 'var(--color-border)',
+                                                                        backgroundColor: isKnow ? 'var(--color-success)' : 'transparent',
+                                                                        color: isKnow ? '#FFF' : 'var(--color-muted)',
+                                                                        padding: '4px 10px',
+                                                                        borderRadius: '12px',
+                                                                        fontSize: 'var(--text-xs)',
+                                                                        cursor: 'pointer',
+                                                                        fontWeight: 600,
+                                                                        transition: 'all var(--transition)'
+                                                                    }}
+                                                                >
+                                                                    {isKnow ? "I know this" : "Need practice"}
+                                                                </button>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                )
-                                            })}
+                                                    )
+                                                })}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))}
                             </div>
                         </CardContent>
                     </Card>
@@ -449,7 +490,7 @@ export default function AssessmentsPage() {
                         </button>
                     </div>
 
-                    {currentResult.roundMapping && (
+                    {currentResult.roundMapping && currentResult.roundMapping.length > 0 && (
                         <div style={{ marginBottom: 'var(--space-lg)' }}>
                             <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 'var(--text-lg)', fontWeight: 700, marginBottom: 'var(--space-md)' }}>
                                 Dynamic Round Mapping (Timeline)
@@ -466,8 +507,8 @@ export default function AssessmentsPage() {
                                         </div>
                                         {/* Content */}
                                         <div style={{ paddingBottom: 'var(--space-lg)' }}>
-                                            <h4 style={{ margin: '0 0 4px 0', fontSize: 'var(--text-base)', fontWeight: 700 }}>{rd.title} <span style={{ color: 'var(--color-primary, var(--color-accent))' }}>({rd.desc})</span></h4>
-                                            <p style={{ margin: 0, color: 'var(--color-text)', fontSize: 'var(--text-sm)', lineHeight: 'var(--leading-relaxed)' }}><strong>Why this round matters:</strong> {rd.why}</p>
+                                            <h4 style={{ margin: '0 0 4px 0', fontSize: 'var(--text-base)', fontWeight: 700 }}>{rd.roundTitle} <span style={{ color: 'var(--color-primary, var(--color-accent))' }}>({rd.focusAreas.join(", ")})</span></h4>
+                                            <p style={{ margin: 0, color: 'var(--color-text)', fontSize: 'var(--text-sm)', lineHeight: 'var(--leading-relaxed)' }}><strong>Why this round matters:</strong> {rd.whyItMatters}</p>
                                         </div>
                                     </div>
                                 ))}
@@ -481,14 +522,14 @@ export default function AssessmentsPage() {
                                 Round-wise Preparation Checklist
                             </h3>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-                                {Object.entries(currentResult.checklist).map(([round, items]) => (
-                                    <Card key={round}>
+                                {currentResult.checklist.map((rd, idx) => (
+                                    <Card key={idx}>
                                         <CardHeader>
-                                            <CardTitle>{round}</CardTitle>
+                                            <CardTitle>{rd.roundTitle}</CardTitle>
                                         </CardHeader>
                                         <CardContent>
                                             <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                {items.map((item, i) => (
+                                                {rd.items.map((item, i) => (
                                                     <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: 'var(--text-sm)' }}>
                                                         <CheckCircle2 size={16} color="var(--color-success)" style={{ flexShrink: 0, marginTop: '2px' }} />
                                                         <span>{item}</span>
@@ -506,12 +547,12 @@ export default function AssessmentsPage() {
                                 Adaptive 7-Day Plan
                             </h3>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                                {currentResult.plan.map((p, i) => (
+                                {currentResult.plan7Days.map((p, i) => (
                                     <div key={i} style={{ display: 'flex', gap: 'var(--space-md)', paddingBottom: 'var(--space-sm)', borderBottom: '1px solid var(--color-border-light)' }}>
                                         <div style={{ fontWeight: 700, width: '70px', flexShrink: 0 }}>{p.day}</div>
                                         <div>
-                                            <div style={{ fontWeight: 600, color: 'var(--color-primary, var(--color-accent))', marginBottom: '4px' }}>{p.title}</div>
-                                            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-muted)' }}>{p.desc}</div>
+                                            <div style={{ fontWeight: 600, color: 'var(--color-primary, var(--color-accent))', marginBottom: '4px' }}>{p.focus}</div>
+                                            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-muted)' }}>{p.tasks.join(" ")}</div>
                                         </div>
                                     </div>
                                 ))}

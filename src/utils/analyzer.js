@@ -1,12 +1,12 @@
 // Offline JD Analyzer Utility
 
 const SKILL_DEF = {
-    "Core CS": ["dsa", "oop", "dbms", "os", "networks", "data structures", "algorithms"],
-    "Languages": ["java", "python", "javascript", "typescript", "c", "c++", "c#", "go", "golang"],
-    "Web": ["react", "next.js", "node.js", "express", "rest", "graphql", "html", "css", "frontend", "backend"],
-    "Data": ["sql", "mongodb", "postgresql", "mysql", "redis", "database"],
-    "Cloud/DevOps": ["aws", "azure", "gcp", "docker", "kubernetes", "ci/cd", "linux", "devops", "k8s"],
-    "Testing": ["selenium", "cypress", "playwright", "junit", "pytest", "jest", "mocha"]
+    "coreCS": ["dsa", "oop", "dbms", "os", "networks", "data structures", "algorithms"],
+    "languages": ["java", "python", "javascript", "typescript", "c", "c++", "c#", "go", "golang"],
+    "web": ["react", "next.js", "node.js", "express", "rest", "graphql", "html", "css", "frontend", "backend"],
+    "data": ["sql", "mongodb", "postgresql", "mysql", "redis", "database"],
+    "cloud": ["aws", "azure", "gcp", "docker", "kubernetes", "ci/cd", "linux", "devops", "k8s"],
+    "testing": ["selenium", "cypress", "playwright", "junit", "pytest", "jest", "mocha"]
 };
 
 // Skill-specific question bank
@@ -51,18 +51,25 @@ export function analyzeJD(company, role, jdText) {
     const text = jdText.toLowerCase();
 
     // 1) Extract Skills
-    const extractedSkills = {};
+    const extractedSkills = {
+        coreCS: [],
+        languages: [],
+        web: [],
+        data: [],
+        cloud: [],
+        testing: [],
+        other: []
+    };
+
     let totalCategories = 0;
 
     Object.keys(SKILL_DEF).forEach(category => {
         const found = SKILL_DEF[category].filter(skill => {
-            // Create word boundary regex if possible, otherwise simple includes is enough for heuristics
             const regex = new RegExp(`\\b${skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
             return regex.test(text);
         });
 
         if (found.length > 0) {
-            // Map back to proper casing
             extractedSkills[category] = Array.from(new Set(found.map(f => {
                 if (f === 'dsa') return 'DSA';
                 if (f === 'oop') return 'OOP';
@@ -78,63 +85,76 @@ export function analyzeJD(company, role, jdText) {
         }
     });
 
-    const flatSkills = Object.values(extractedSkills).flat();
+    let flatSkills = Object.values(extractedSkills).flat();
     const hasSkills = flatSkills.length > 0;
 
     if (!hasSkills) {
-        extractedSkills["General"] = ["General fresher stack"];
+        extractedSkills.other = ["Communication", "Problem solving", "Basic coding", "Projects"];
+        flatSkills = ["Communication", "Problem solving", "Basic coding", "Projects"];
     }
 
     // 2) Generate Output checklists
-    const checklist = {
-        "Round 1: Aptitude / Basics": [
-            "Review quantitative aptitude formulas",
-            "Practice logical reasoning puzzles",
-            "Brush up on verbal ability",
-            "Revise basic CS fundamentals",
-            "Take 1 full-length aptitude mock"
-        ],
-        "Round 2: DSA + Core CS": [
-            "Practice array and string manipulation",
-            "Review linked lists, stacks, and queues",
-            "Solve basic tree and graph problems",
-            "Revise Time/Space complexity",
-            "Brush up on sorting and searching algorithms"
-        ],
-        "Round 3: Tech interview (projects + stack)": [
-            "Prepare a 2-minute project pitch",
-            "Review architecture of past projects",
-            "Prepare for deep-dive into your specific code",
-            hasSkills ? `Revise concepts for: ${flatSkills.slice(0, 3).join(", ")}` : "Revise your strongest programming language",
-            "Practice whiteboarding solutions"
-        ],
-        "Round 4: Managerial / HR": [
-            "Prepare STAR method stories for common behavioral questions",
-            `Research ${company || 'the company'}'s recent news and culture`,
-            "Prepare 3 strong questions to ask the interviewer",
-            "Review salary expectations and negotiation strategy",
-            "Ensure quiet environment and technical setup for call"
-        ]
-    };
+    const checklist = [
+        {
+            roundTitle: "Round 1: Aptitude / Basics",
+            items: [
+                "Review quantitative aptitude formulas",
+                "Practice logical reasoning puzzles",
+                "Brush up on verbal ability",
+                "Revise basic CS fundamentals",
+                "Take 1 full-length aptitude mock"
+            ]
+        },
+        {
+            roundTitle: "Round 2: DSA + Core CS",
+            items: [
+                "Practice array and string manipulation",
+                "Review linked lists, stacks, and queues",
+                "Solve basic tree and graph problems",
+                "Revise Time/Space complexity",
+                "Brush up on sorting and searching algorithms"
+            ]
+        },
+        {
+            roundTitle: "Round 3: Tech interview (projects + stack)",
+            items: [
+                "Prepare a 2-minute project pitch",
+                "Review architecture of past projects",
+                "Prepare for deep-dive into your specific code",
+                hasSkills ? `Revise concepts for: ${flatSkills.slice(0, 3).join(", ")}` : "Revise generic behavioral questions and problem solving",
+                "Practice whiteboarding solutions"
+            ]
+        },
+        {
+            roundTitle: "Round 4: Managerial / HR",
+            items: [
+                "Prepare STAR method stories for common behavioral questions",
+                `Research ${company || 'the company'}'s recent news and culture`,
+                "Prepare 3 strong questions to ask the interviewer",
+                "Review salary expectations and negotiation strategy",
+                "Ensure quiet environment and technical setup for call"
+            ]
+        }
+    ];
 
     // 3) 7-day Plan
     let day5Plan = "Project + resume alignment";
-    if (extractedSkills["Web"]) day5Plan += " + Frontend/Backend Revision";
-    if (extractedSkills["Data"]) day5Plan += " + Database & SQL Revision";
+    if (extractedSkills.web.length > 0) day5Plan += " + Frontend/Backend Revision";
+    if (extractedSkills.data.length > 0) day5Plan += " + Database & SQL Revision";
+    if (!hasSkills) day5Plan = "Project + Soft Skills Revision";
 
-    const plan = [
-        { day: "Day 1–2", title: "Basics + Core CS", desc: "Brush up on OS, Networks, DBMS, and OOP concepts." },
-        { day: "Day 3–4", title: "DSA + Coding Practice", desc: "Focus on frequent patterns, arrays, strings, and trees." },
-        { day: "Day 5", title: day5Plan, desc: "Align your resume with the JD and revise your tech stack." },
-        { day: "Day 6", title: "Mock Interview Questions", desc: "Practice speaking solutions out loud with a timer." },
-        { day: "Day 7", title: "Revision + Weak Areas", desc: "Go over formulas, complex concepts, and rest well." }
+    const plan7Days = [
+        { day: "Day 1–2", focus: "Basics + Core CS", tasks: ["Brush up on OS, Networks, DBMS, and OOP concepts.", "Review general project structures."] },
+        { day: "Day 3–4", focus: "DSA + Coding Practice", tasks: ["Focus on frequent patterns, arrays, strings, and trees.", "Solve 5 problems daily."] },
+        { day: "Day 5", focus: day5Plan, tasks: ["Align your resume with the JD.", "Revise your tech stack."] },
+        { day: "Day 6", focus: "Mock Interview Questions", tasks: ["Practice speaking solutions out loud with a timer.", "Record yourself answering HR questions."] },
+        { day: "Day 7", focus: "Revision + Weak Areas", tasks: ["Go over formulas, complex concepts, and rest well.", "Prepare your interview space."] }
     ];
 
     // 4) Questions Generator
     const questions = [];
     const lowercaseSkills = flatSkills.map(s => s.toLowerCase());
 
-    // Pick skill-specific questions
     lowercaseSkills.forEach(skill => {
         if (QUESTION_BANK[skill] && questions.length < 10) {
             if (!questions.includes(QUESTION_BANK[skill])) {
@@ -143,7 +163,6 @@ export function analyzeJD(company, role, jdText) {
         }
     });
 
-    // Fill the rest with generic questions
     let genericIndex = 0;
     while (questions.length < 10 && genericIndex < GENERIC_QUESTIONS.length) {
         if (!questions.includes(GENERIC_QUESTIONS[genericIndex])) {
@@ -158,10 +177,11 @@ export function analyzeJD(company, role, jdText) {
     if (company && company.trim().length > 0) baseScore += 10;
     if (role && role.trim().length > 0) baseScore += 10;
     if (jdText && jdText.trim().length > 800) baseScore += 10;
-
     if (jdText && jdText.trim().length < 50) baseScore -= 15; // penalty for very short JDs
 
-    // Initialize Confidence Map
+    // Max sure base score isn't too low if short JD but lots of skills
+    baseScore = Math.max(0, Math.min(100, baseScore));
+
     const skillConfidenceMap = {};
     flatSkills.forEach(skill => {
         skillConfidenceMap[skill] = "practice";
@@ -169,57 +189,72 @@ export function analyzeJD(company, role, jdText) {
 
     let practiceCount = flatSkills.length;
     let score = baseScore - (practiceCount * 2);
-
-    score = Math.max(0, Math.min(100, score)); // clamp
+    score = Math.max(0, Math.min(100, score));
 
     // 6) Company Intel & Dynamic Round Mapping
-    let companyIntel = null;
-    let roundMapping = null;
+    let roundMapping = [];
+
+    // Default startup mapping
+    let isEnterprise = false;
 
     if (company && company.trim().length > 0) {
         const ENTERPRISE_LIST = ['amazon', 'google', 'microsoft', 'meta', 'apple', 'netflix', 'infosys', 'tcs', 'wipro', 'hcl', 'cognizant', 'ibm', 'accenture', 'capgemini', 'oracle', 'cisco', 'deloitte', 'pwc', 'ey', 'kpmg', 'tech mahindra'];
+        isEnterprise = ENTERPRISE_LIST.includes(company.trim().toLowerCase());
+    }
 
-        const isEnterprise = ENTERPRISE_LIST.includes(company.trim().toLowerCase());
-        const size = isEnterprise ? "Enterprise (2000+)" : "Startup (<200)";
-        const focus = isEnterprise ? "Structured DSA + core fundamentals" : "Practical problem solving + stack depth";
+    let companyIntel = null;
 
+    if (isEnterprise) {
         companyIntel = {
             name: company.trim(),
             industry: "Technology Services",
-            size,
-            focus
+            size: "Enterprise (2000+)",
+            focus: "Structured DSA + core fundamentals"
         };
-
-        if (isEnterprise) {
-            roundMapping = [
-                { title: "Round 1: Online Test", desc: "DSA + Aptitude", why: "Filters candidates based on core problem-solving speed and logic." },
-                { title: "Round 2: Technical", desc: "DSA + Core CS", why: "Evaluates deep understanding of data structures and computer science fundamentals." },
-                { title: "Round 3: Tech + Projects", desc: "Stack Implementation", why: "Assesses practical application of your tech stack in real-world scenarios." },
-                { title: "Round 4: HR", desc: "Behavioral", why: "Checks behavioral fit, leadership principles, and communication." }
-            ];
-        } else {
-            roundMapping = [
-                { title: "Round 1: Practical coding", desc: "Take-home or pair programming", why: "Tests your ability to build functional features quickly and cleanly." },
-                { title: "Round 2: System discussion", desc: "Architecture deep dive", why: "Evaluates how you architect solutions and understand your specific tech stack." },
-                { title: "Round 3: Culture fit", desc: "Founder or team round", why: "Ensures you align with the fast-paced, ownership-driven startup environment." }
-            ];
-        }
+        roundMapping = [
+            { roundTitle: "Round 1: Online Test", focusAreas: ["DSA", "Aptitude"], whyItMatters: "Filters candidates based on core problem-solving speed and logic." },
+            { roundTitle: "Round 2: Technical", focusAreas: ["DSA", "Core CS"], whyItMatters: "Evaluates deep understanding of data structures and computer science fundamentals." },
+            { roundTitle: "Round 3: Tech + Projects", focusAreas: ["Stack Implementation", "Projects"], whyItMatters: "Assesses practical application of your tech stack in real-world scenarios." },
+            { roundTitle: "Round 4: HR", focusAreas: ["Behavioral", "Culture Fit"], whyItMatters: "Checks behavioral fit, leadership principles, and communication." }
+        ];
+    } else if (company && company.trim().length > 0) {
+        companyIntel = {
+            name: company.trim(),
+            industry: "Technology Services",
+            size: "Startup (<200)",
+            focus: "Practical problem solving + stack depth"
+        };
+        roundMapping = [
+            { roundTitle: "Round 1: Practical coding", focusAreas: ["Take-home", "Pair programming"], whyItMatters: "Tests your ability to build functional features quickly and cleanly." },
+            { roundTitle: "Round 2: System discussion", focusAreas: ["Architecture", "Deep dive"], whyItMatters: "Evaluates how you architect solutions and understand your specific tech stack." },
+            { roundTitle: "Round 3: Culture fit", focusAreas: ["Founder", "Team alignment"], whyItMatters: "Ensures you align with the fast-paced, ownership-driven startup environment." }
+        ];
+    } else {
+        // Even if no company intel is generated (no company provided), we still keep the round string arrays for fallback
+        roundMapping = [
+            { roundTitle: "Round 1: Practical coding", focusAreas: ["Take-home", "Pair programming"], whyItMatters: "Tests your ability to build functional features quickly and cleanly." },
+            { roundTitle: "Round 2: System discussion", focusAreas: ["Architecture", "Deep dive"], whyItMatters: "Evaluates how you architect solutions and understand your specific tech stack." },
+            { roundTitle: "Round 3: Culture fit", focusAreas: ["Founder", "Team alignment"], whyItMatters: "Ensures you align with the fast-paced, ownership-driven startup environment." }
+        ];
     }
+
+    const now = new Date().toISOString();
 
     return {
         id: Date.now().toString(),
-        createdAt: new Date().toISOString(),
-        company: company || "Unknown Company",
-        role: role || "Unknown Role",
+        createdAt: now,
+        company: company || "",
+        role: role || "",
         jdText,
         extractedSkills,
-        plan,
+        companyIntel,
+        roundMapping,
         checklist,
+        plan7Days,
         questions,
         baseScore,
         skillConfidenceMap,
-        readinessScore: score,
-        companyIntel,
-        roundMapping
+        finalScore: score,
+        updatedAt: now
     };
 }
