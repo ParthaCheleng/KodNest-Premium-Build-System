@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { ClipboardCheck, Briefcase, FileText, Building, History, Clock, ArrowLeft, CheckCircle2 } from 'lucide-react'
+import { ClipboardCheck, Briefcase, FileText, Building, Clock, ArrowLeft, CheckCircle2, Copy, Download, AlertTriangle } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 import { CircularProgress } from '../components/CircularProgress'
 import { analyzeJD } from '../utils/analyzer'
 
 export default function AssessmentsPage() {
-    const [activeTab, setActiveTab] = useState('analyze') // 'analyze' | 'history' | 'results'
+    const [activeTab, setActiveTab] = useState('analyze')
 
     // Form State
     const [company, setCompany] = useState('')
@@ -36,6 +36,7 @@ export default function AssessmentsPage() {
         }
         setError('')
 
+        // analyzeJD returns baseScore, skillConfidenceMap (default 'practice'), and initial readinessScore
         const result = analyzeJD(company, role, jdText)
 
         const newHistory = [result, ...history]
@@ -56,7 +57,90 @@ export default function AssessmentsPage() {
         setActiveTab('results')
     }
 
-    // Common UI styles mapped from original design tokens
+    // --- Interactive Skill Toggles ---
+    const handleToggleSkill = (skill) => {
+        if (!currentResult) return;
+
+        const newMap = { ...(currentResult.skillConfidenceMap || {}) };
+        newMap[skill] = newMap[skill] === 'know' ? 'practice' : 'know';
+
+        let knowCount = 0;
+        let practiceCount = 0;
+        Object.values(newMap).forEach(val => {
+            if (val === 'know') knowCount++;
+            else practiceCount++;
+        });
+
+        let newScore = currentResult.baseScore + (knowCount * 2) - (practiceCount * 2);
+        newScore = Math.max(0, Math.min(100, newScore));
+
+        const updatedResult = {
+            ...currentResult,
+            skillConfidenceMap: newMap,
+            readinessScore: newScore
+        };
+
+        setCurrentResult(updatedResult);
+
+        const newHistory = history.map(item => item.id === updatedResult.id ? updatedResult : item);
+        setHistory(newHistory);
+        localStorage.setItem('jd_analyzer_history', JSON.stringify(newHistory));
+    }
+
+    // --- Export Handlers ---
+    const handleCopyPlan = () => {
+        const text = currentResult.plan.map(p => `${p.day}: ${p.title}\n${p.desc}`).join('\n\n');
+        navigator.clipboard.writeText(text);
+        alert('7-Day Plan Copied!');
+    }
+
+    const handleCopyChecklist = () => {
+        const text = Object.entries(currentResult.checklist).map(([round, items]) => {
+            return `${round}\n${items.map(i => `- ${i}`).join('\n')}`
+        }).join('\n\n');
+        navigator.clipboard.writeText(text);
+        alert('Checklist Copied!');
+    }
+
+    const handleCopyQuestions = () => {
+        const text = currentResult.questions.map((q, i) => `${i + 1}. ${q}`).join('\n');
+        navigator.clipboard.writeText(text);
+        alert('Questions Copied!');
+    }
+
+    const handleDownloadTxt = () => {
+        let text = `Role: ${currentResult.role}\nCompany: ${currentResult.company}\nScore: ${currentResult.readinessScore}/100\n\n`;
+
+        text += `=== EXTRACTED SKILLS ===\n`;
+        Object.entries(currentResult.extractedSkills).forEach(([cat, skills]) => {
+            text += `${cat}: ${skills.join(', ')}\n`;
+        });
+
+        text += `\n=== ROUND CHECKLIST ===\n`;
+        Object.entries(currentResult.checklist).forEach(([round, items]) => {
+            text += `${round}\n${items.map(i => `- ${i}`).join('\n')}\n\n`;
+        });
+
+        text += `=== 7-DAY PLAN ===\n`;
+        currentResult.plan.forEach(p => {
+            text += `${p.day}: ${p.title}\n${p.desc}\n\n`;
+        });
+
+        text += `=== 10 INTERVIEW QUESTIONS ===\n`;
+        currentResult.questions.forEach((q, i) => {
+            text += `${i + 1}. ${q}\n`;
+        });
+
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `KodNest_Prep_${currentResult.company.replace(/\s+/g, '_')}_${currentResult.role.replace(/\s+/g, '_')}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    // Common UI styles
     const inputStyle = {
         width: '100%',
         padding: 'var(--space-sm)',
@@ -78,7 +162,25 @@ export default function AssessmentsPage() {
         fontFamily: 'var(--font-body)',
         fontWeight: 600,
         cursor: 'pointer',
-        transition: 'opacity var(--transition)'
+        transition: 'opacity var(--transition)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px'
+    }
+
+    const btnSecondary = {
+        padding: 'var(--space-sm) var(--space-md)',
+        backgroundColor: 'transparent',
+        color: 'var(--color-text)',
+        border: '1px solid var(--color-border)',
+        borderRadius: 'var(--radius)',
+        fontFamily: 'var(--font-body)',
+        fontWeight: 600,
+        cursor: 'pointer',
+        transition: 'all var(--transition)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px'
     }
 
     const tabStyle = (isActive) => ({
@@ -90,6 +192,15 @@ export default function AssessmentsPage() {
         fontFamily: 'var(--font-body)',
     })
 
+    // Action Next box logic
+    let weakSkills = [];
+    if (currentResult && currentResult.skillConfidenceMap) {
+        weakSkills = Object.entries(currentResult.skillConfidenceMap)
+            .filter(([_, val]) => val === 'practice')
+            .map(([skill]) => skill)
+            .slice(0, 3);
+    }
+
     return (
         <div style={{ paddingBottom: 'var(--space-xl)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', marginBottom: 'var(--space-md)' }}>
@@ -99,7 +210,6 @@ export default function AssessmentsPage() {
                 </h2>
             </div>
 
-            {/* Tabs */}
             {activeTab !== 'results' && (
                 <div style={{ display: 'flex', gap: 'var(--space-md)', borderBottom: '1px solid var(--color-border-light)', marginBottom: 'var(--space-lg)' }}>
                     <div style={tabStyle(activeTab === 'analyze')} onClick={() => setActiveTab('analyze')}>
@@ -124,48 +234,23 @@ export default function AssessmentsPage() {
                                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontWeight: 600 }}>
                                         <Building size={16} /> Company (Optional)
                                     </label>
-                                    <input
-                                        style={inputStyle}
-                                        type="text"
-                                        placeholder="e.g. Google"
-                                        value={company}
-                                        onChange={(e) => setCompany(e.target.value)}
-                                    />
+                                    <input style={inputStyle} type="text" placeholder="e.g. Google" value={company} onChange={(e) => setCompany(e.target.value)} />
                                 </div>
                                 <div>
                                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontWeight: 600 }}>
                                         <Briefcase size={16} /> Role (Optional)
                                     </label>
-                                    <input
-                                        style={inputStyle}
-                                        type="text"
-                                        placeholder="e.g. Frontend Engineer"
-                                        value={role}
-                                        onChange={(e) => setRole(e.target.value)}
-                                    />
+                                    <input style={inputStyle} type="text" placeholder="e.g. Frontend Engineer" value={role} onChange={(e) => setRole(e.target.value)} />
                                 </div>
                             </div>
-
                             <div>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontWeight: 600 }}>
                                     <FileText size={16} /> Job Description Text *
                                 </label>
-                                <textarea
-                                    style={{ ...inputStyle, minHeight: '200px', resize: 'vertical' }}
-                                    placeholder="Paste the full job description here..."
-                                    value={jdText}
-                                    onChange={(e) => setJdText(e.target.value)}
-                                />
+                                <textarea style={{ ...inputStyle, minHeight: '200px', resize: 'vertical' }} placeholder="Paste the full job description here..." value={jdText} onChange={(e) => setJdText(e.target.value)} />
                             </div>
-
                             {error && <p style={{ color: 'var(--color-accent)', marginBottom: 'var(--space-sm)' }}>{error}</p>}
-
-                            <button
-                                style={btnPrimary}
-                                onClick={handleAnalyze}
-                                onMouseEnter={(e) => e.target.style.opacity = '0.9'}
-                                onMouseLeave={(e) => e.target.style.opacity = '1'}
-                            >
+                            <button style={btnPrimary} onClick={handleAnalyze} onMouseEnter={(e) => e.target.style.opacity = '0.9'} onMouseLeave={(e) => e.target.style.opacity = '1'}>
                                 Analyze JD
                             </button>
                         </CardContent>
@@ -181,31 +266,14 @@ export default function AssessmentsPage() {
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
                             {history.map((item) => (
-                                <div
-                                    key={item.id}
-                                    onClick={() => viewHistoryItem(item)}
-                                    style={{
-                                        padding: 'var(--space-md)',
-                                        backgroundColor: 'var(--color-surface)',
-                                        border: '1px solid var(--color-border-light)',
-                                        borderRadius: 'var(--radius)',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center'
-                                    }}
-                                >
+                                <div key={item.id} onClick={() => viewHistoryItem(item)} style={{ padding: 'var(--space-md)', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <div>
-                                        <h3 style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, margin: '0 0 4px 0' }}>
-                                            {item.role} @ {item.company}
-                                        </h3>
+                                        <h3 style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, margin: '0 0 4px 0' }}>{item.role} @ {item.company}</h3>
                                         <p style={{ margin: 0, color: 'var(--color-muted)', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                             <Clock size={14} /> {new Date(item.createdAt).toLocaleDateString()}
                                         </p>
                                     </div>
-                                    <div style={{ fontWeight: 600, color: 'var(--color-primary, var(--color-accent))' }}>
-                                        Score: {item.readinessScore}
-                                    </div>
+                                    <div style={{ fontWeight: 600, color: 'var(--color-primary, var(--color-accent))' }}>Score: {item.readinessScore}</div>
                                 </div>
                             ))}
                         </div>
@@ -216,21 +284,7 @@ export default function AssessmentsPage() {
             {/* RESULTS VIEW */}
             {activeTab === 'results' && currentResult && (
                 <div>
-                    <button
-                        onClick={() => setActiveTab('history')}
-                        style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--color-text)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            cursor: 'pointer',
-                            fontWeight: 600,
-                            fontFamily: 'var(--font-body)',
-                            marginBottom: 'var(--space-lg)'
-                        }}
-                    >
+                    <button onClick={() => setActiveTab('history')} style={{ background: 'none', border: 'none', color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600, fontFamily: 'var(--font-body)', marginBottom: 'var(--space-lg)' }}>
                         <ArrowLeft size={18} /> Back to History
                     </button>
 
@@ -250,7 +304,7 @@ export default function AssessmentsPage() {
 
                         <Card>
                             <CardHeader>
-                                <CardTitle>JD Breakdown Score</CardTitle>
+                                <CardTitle>Live JD Breakdown Score</CardTitle>
                             </CardHeader>
                             <CardContent style={{ display: 'flex', justifyContent: 'center' }}>
                                 <CircularProgress score={currentResult.readinessScore} />
@@ -260,32 +314,95 @@ export default function AssessmentsPage() {
 
                     <Card style={{ marginBottom: 'var(--space-lg)' }}>
                         <CardHeader>
-                            <CardTitle>Extracted Skills</CardTitle>
+                            <CardTitle>Extracted Skills & Self-Assessment</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-md)' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
                                 {Object.entries(currentResult.extractedSkills).map(([cat, skills]) => (
                                     <div key={cat}>
                                         <h4 style={{ fontWeight: 600, marginBottom: '8px', color: 'var(--color-muted)' }}>{cat}</h4>
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                            {skills.map(skill => (
-                                                <span key={skill} style={{
-                                                    padding: '4px 12px',
-                                                    backgroundColor: 'var(--color-primary-100, rgba(139,0,0,0.1))',
-                                                    color: 'var(--color-primary-900, var(--color-accent))',
-                                                    borderRadius: '16px',
-                                                    fontSize: 'var(--text-sm)',
-                                                    fontWeight: 500
-                                                }}>
-                                                    {skill}
-                                                </span>
-                                            ))}
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                                            {skills.map(skill => {
+                                                const isKnow = currentResult.skillConfidenceMap?.[skill] === 'know';
+                                                return (
+                                                    <div
+                                                        key={skill}
+                                                        style={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '12px',
+                                                            padding: '8px 12px',
+                                                            border: '1px solid var(--color-border-light)',
+                                                            borderRadius: 'var(--radius)',
+                                                            backgroundColor: 'white'
+                                                        }}
+                                                    >
+                                                        <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text)' }}>
+                                                            {skill}
+                                                        </span>
+                                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                                            <button
+                                                                onClick={() => handleToggleSkill(skill)}
+                                                                style={{
+                                                                    border: '1px solid',
+                                                                    borderColor: isKnow ? 'var(--color-success)' : 'var(--color-border)',
+                                                                    backgroundColor: isKnow ? 'var(--color-success)' : 'transparent',
+                                                                    color: isKnow ? '#FFF' : 'var(--color-muted)',
+                                                                    padding: '4px 10px',
+                                                                    borderRadius: '12px',
+                                                                    fontSize: 'var(--text-xs)',
+                                                                    cursor: 'pointer',
+                                                                    fontWeight: 600,
+                                                                    transition: 'all var(--transition)'
+                                                                }}
+                                                            >
+                                                                {isKnow ? "I know this" : "Need practice"}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
                                         </div>
                                     </div>
                                 ))}
                             </div>
                         </CardContent>
                     </Card>
+
+                    <div style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap', marginBottom: 'var(--space-lg)' }}>
+                        <button
+                            style={btnSecondary}
+                            onClick={handleCopyPlan}
+                            onMouseEnter={(e) => Object.assign(e.target.style, { backgroundColor: 'var(--color-surface)' })}
+                            onMouseLeave={(e) => Object.assign(e.target.style, { backgroundColor: 'transparent' })}
+                        >
+                            <Copy size={16} /> Copy 7-day plan
+                        </button>
+                        <button
+                            style={btnSecondary}
+                            onClick={handleCopyChecklist}
+                            onMouseEnter={(e) => Object.assign(e.target.style, { backgroundColor: 'var(--color-surface)' })}
+                            onMouseLeave={(e) => Object.assign(e.target.style, { backgroundColor: 'transparent' })}
+                        >
+                            <Copy size={16} /> Copy checklist
+                        </button>
+                        <button
+                            style={btnSecondary}
+                            onClick={handleCopyQuestions}
+                            onMouseEnter={(e) => Object.assign(e.target.style, { backgroundColor: 'var(--color-surface)' })}
+                            onMouseLeave={(e) => Object.assign(e.target.style, { backgroundColor: 'transparent' })}
+                        >
+                            <Copy size={16} /> Copy 10 questions
+                        </button>
+                        <button
+                            style={btnPrimary}
+                            onClick={handleDownloadTxt}
+                            onMouseEnter={(e) => e.target.style.opacity = '0.9'}
+                            onMouseLeave={(e) => e.target.style.opacity = '1'}
+                        >
+                            <Download size={16} /> Download as TXT
+                        </button>
+                    </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 'var(--space-lg)', marginBottom: 'var(--space-lg)' }}>
                         <div>
@@ -331,7 +448,7 @@ export default function AssessmentsPage() {
                         </div>
                     </div>
 
-                    <Card>
+                    <Card style={{ marginBottom: 'var(--space-lg)' }}>
                         <CardHeader>
                             <CardTitle>Likely Interview Questions (Based on JD)</CardTitle>
                         </CardHeader>
@@ -343,9 +460,37 @@ export default function AssessmentsPage() {
                             </ol>
                         </CardContent>
                     </Card>
+
+                    {/* Action Next Box */}
+                    <div style={{
+                        marginTop: 'var(--space-md)',
+                        padding: 'var(--space-md)',
+                        backgroundColor: 'var(--color-surface)',
+                        border: '1px solid var(--color-border-light)',
+                        borderLeft: '4px solid var(--color-primary, var(--color-accent))',
+                        borderRadius: 'var(--radius)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 'var(--space-xs)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <AlertTriangle size={20} color="var(--color-primary, var(--color-accent))" />
+                            <h4 style={{ margin: 0, fontFamily: 'var(--font-heading)', fontSize: 'var(--text-lg)' }}>Action Next</h4>
+                        </div>
+                        {weakSkills.length > 0 ? (
+                            <p style={{ margin: 0, color: 'var(--color-text)', lineHeight: 'var(--leading-relaxed)' }}>
+                                Focus on your weakest areas: <strong>{weakSkills.join(', ')}</strong>.<br />
+                                Suggest next action: <strong>Start Day 1 plan now.</strong>
+                            </p>
+                        ) : (
+                            <p style={{ margin: 0, color: 'var(--color-text)', lineHeight: 'var(--leading-relaxed)' }}>
+                                You marked all skills as "I know this". Great job!<br />
+                                Suggest next action: <strong>Start Day 1 plan now.</strong>
+                            </p>
+                        )}
+                    </div>
                 </div>
             )}
-
         </div>
     )
 }

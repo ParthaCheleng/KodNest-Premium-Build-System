@@ -153,13 +153,22 @@ export function analyzeJD(company, role, jdText) {
     }
 
     // 5) Readiness Score
-    let score = 35; // base
-    score += Math.min(30, totalCategories * 5);
-    if (company && company.trim().length > 0) score += 10;
-    if (role && role.trim().length > 0) score += 10;
-    if (jdText && jdText.trim().length > 800) score += 10;
+    let baseScore = 35; // base
+    baseScore += Math.min(30, totalCategories * 5);
+    if (company && company.trim().length > 0) baseScore += 10;
+    if (role && role.trim().length > 0) baseScore += 10;
+    if (jdText && jdText.trim().length > 800) baseScore += 10;
 
-    if (jdText && jdText.trim().length < 50) score -= 15; // penalty for very short JDs
+    if (jdText && jdText.trim().length < 50) baseScore -= 15; // penalty for very short JDs
+
+    // Initialize Confidence Map
+    const skillConfidenceMap = {};
+    flatSkills.forEach(skill => {
+        skillConfidenceMap[skill] = "practice";
+    });
+
+    let practiceCount = flatSkills.length;
+    let score = baseScore - (practiceCount * 2);
 
     score = Math.max(0, Math.min(100, score)); // clamp
 
@@ -173,6 +182,8 @@ export function analyzeJD(company, role, jdText) {
         plan,
         checklist,
         questions,
+        baseScore,
+        skillConfidenceMap,
         readinessScore: score
     };
 }
