@@ -111,12 +111,26 @@ export default function AssessmentsPage() {
     const handleDownloadTxt = () => {
         let text = `Role: ${currentResult.role}\nCompany: ${currentResult.company}\nScore: ${currentResult.readinessScore}/100\n\n`;
 
-        text += `=== EXTRACTED SKILLS ===\n`;
+        if (currentResult.companyIntel) {
+            text += `\n=== COMPANY INTEL ===\n`;
+            text += `Industry: ${currentResult.companyIntel.industry}\n`;
+            text += `Size: ${currentResult.companyIntel.size}\n`;
+            text += `Focus: ${currentResult.companyIntel.focus}\n`;
+        }
+
+        text += `\n=== EXTRACTED SKILLS ===\n`;
         Object.entries(currentResult.extractedSkills).forEach(([cat, skills]) => {
             text += `${cat}: ${skills.join(', ')}\n`;
         });
 
-        text += `\n=== ROUND CHECKLIST ===\n`;
+        if (currentResult.roundMapping) {
+            text += `\n=== DYNAMIC ROUND MAPPING ===\n`;
+            currentResult.roundMapping.forEach(rd => {
+                text += `${rd.title} - ${rd.desc}\nWhy this round matters: ${rd.why}\n\n`;
+            });
+        }
+
+        text += `\n=== STANDARD ROUND CHECKLIST ===\n`;
         Object.entries(currentResult.checklist).forEach(([round, items]) => {
             text += `${round}\n${items.map(i => `- ${i}`).join('\n')}\n\n`;
         });
@@ -312,6 +326,37 @@ export default function AssessmentsPage() {
                         </Card>
                     </div>
 
+                    {currentResult.companyIntel && (
+                        <Card style={{ marginBottom: 'var(--space-lg)' }}>
+                            <CardHeader>
+                                <CardTitle>Company Intel</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-md)', marginBottom: 'var(--space-md)' }}>
+                                    <div>
+                                        <p style={{ margin: '0 0 4px 0', color: 'var(--color-muted)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>Company</p>
+                                        <p style={{ margin: 0, fontWeight: 500 }}>{currentResult.companyIntel.name}</p>
+                                    </div>
+                                    <div>
+                                        <p style={{ margin: '0 0 4px 0', color: 'var(--color-muted)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>Industry (Est.)</p>
+                                        <p style={{ margin: 0, fontWeight: 500 }}>{currentResult.companyIntel.industry}</p>
+                                    </div>
+                                    <div>
+                                        <p style={{ margin: '0 0 4px 0', color: 'var(--color-muted)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>Size Category</p>
+                                        <p style={{ margin: 0, fontWeight: 500 }}>{currentResult.companyIntel.size}</p>
+                                    </div>
+                                    <div>
+                                        <p style={{ margin: '0 0 4px 0', color: 'var(--color-muted)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>Typical Hiring Focus</p>
+                                        <p style={{ margin: 0, fontWeight: 500 }}>{currentResult.companyIntel.focus}</p>
+                                    </div>
+                                </div>
+                                <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-muted)', fontStyle: 'italic' }}>
+                                    Demo Mode: Company intel generated heuristically.
+                                </p>
+                            </CardContent>
+                        </Card>
+                    )}
+
                     <Card style={{ marginBottom: 'var(--space-lg)' }}>
                         <CardHeader>
                             <CardTitle>Extracted Skills & Self-Assessment</CardTitle>
@@ -403,6 +448,32 @@ export default function AssessmentsPage() {
                             <Download size={16} /> Download as TXT
                         </button>
                     </div>
+
+                    {currentResult.roundMapping && (
+                        <div style={{ marginBottom: 'var(--space-lg)' }}>
+                            <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 'var(--text-lg)', fontWeight: 700, marginBottom: 'var(--space-md)' }}>
+                                Dynamic Round Mapping (Timeline)
+                            </h3>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+                                {currentResult.roundMapping.map((rd, i) => (
+                                    <div key={i} style={{ display: 'flex', gap: 'var(--space-md)' }}>
+                                        {/* Timeline line and dot */}
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                            <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: 'var(--color-primary, var(--color-accent))', marginTop: '4px', flexShrink: 0 }}></div>
+                                            {i < currentResult.roundMapping.length - 1 && (
+                                                <div style={{ width: '2px', flexGrow: 1, backgroundColor: 'var(--color-border-light)', margin: '4px 0' }}></div>
+                                            )}
+                                        </div>
+                                        {/* Content */}
+                                        <div style={{ paddingBottom: 'var(--space-lg)' }}>
+                                            <h4 style={{ margin: '0 0 4px 0', fontSize: 'var(--text-base)', fontWeight: 700 }}>{rd.title} <span style={{ color: 'var(--color-primary, var(--color-accent))' }}>({rd.desc})</span></h4>
+                                            <p style={{ margin: 0, color: 'var(--color-text)', fontSize: 'var(--text-sm)', lineHeight: 'var(--leading-relaxed)' }}><strong>Why this round matters:</strong> {rd.why}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 'var(--space-lg)', marginBottom: 'var(--space-lg)' }}>
                         <div>

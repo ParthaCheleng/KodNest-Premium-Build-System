@@ -172,6 +172,40 @@ export function analyzeJD(company, role, jdText) {
 
     score = Math.max(0, Math.min(100, score)); // clamp
 
+    // 6) Company Intel & Dynamic Round Mapping
+    let companyIntel = null;
+    let roundMapping = null;
+
+    if (company && company.trim().length > 0) {
+        const ENTERPRISE_LIST = ['amazon', 'google', 'microsoft', 'meta', 'apple', 'netflix', 'infosys', 'tcs', 'wipro', 'hcl', 'cognizant', 'ibm', 'accenture', 'capgemini', 'oracle', 'cisco', 'deloitte', 'pwc', 'ey', 'kpmg', 'tech mahindra'];
+
+        const isEnterprise = ENTERPRISE_LIST.includes(company.trim().toLowerCase());
+        const size = isEnterprise ? "Enterprise (2000+)" : "Startup (<200)";
+        const focus = isEnterprise ? "Structured DSA + core fundamentals" : "Practical problem solving + stack depth";
+
+        companyIntel = {
+            name: company.trim(),
+            industry: "Technology Services",
+            size,
+            focus
+        };
+
+        if (isEnterprise) {
+            roundMapping = [
+                { title: "Round 1: Online Test", desc: "DSA + Aptitude", why: "Filters candidates based on core problem-solving speed and logic." },
+                { title: "Round 2: Technical", desc: "DSA + Core CS", why: "Evaluates deep understanding of data structures and computer science fundamentals." },
+                { title: "Round 3: Tech + Projects", desc: "Stack Implementation", why: "Assesses practical application of your tech stack in real-world scenarios." },
+                { title: "Round 4: HR", desc: "Behavioral", why: "Checks behavioral fit, leadership principles, and communication." }
+            ];
+        } else {
+            roundMapping = [
+                { title: "Round 1: Practical coding", desc: "Take-home or pair programming", why: "Tests your ability to build functional features quickly and cleanly." },
+                { title: "Round 2: System discussion", desc: "Architecture deep dive", why: "Evaluates how you architect solutions and understand your specific tech stack." },
+                { title: "Round 3: Culture fit", desc: "Founder or team round", why: "Ensures you align with the fast-paced, ownership-driven startup environment." }
+            ];
+        }
+    }
+
     return {
         id: Date.now().toString(),
         createdAt: new Date().toISOString(),
@@ -184,6 +218,8 @@ export function analyzeJD(company, role, jdText) {
         questions,
         baseScore,
         skillConfidenceMap,
-        readinessScore: score
+        readinessScore: score,
+        companyIntel,
+        roundMapping
     };
 }
