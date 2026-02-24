@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Platform-specific Tailwind theme using the original design tokens.
+   The original index.css design system tokens remain untouched.
+   These Tailwind theme values mirror the original CSS variables
+   so all pages feel like one mind designed them.
+   ============================================================ */
+
+@theme {
+    /* Colors mapped from original design system */
+    --color-ds-bg: #F7F6F3;
+    --color-ds-text: #111111;
+    --color-ds-accent: #8B0000;
+    --color-ds-accent-hover: #6D0000;
+    --color-ds-success: #4A7C59;
+    --color-ds-warning: #B8860B;
+    --color-ds-border: #D4D1CB;
+    --color-ds-border-light: #E8E6E1;
+    --color-ds-surface: #FFFFFF;
+    --color-ds-muted: #6B6B6B;
+
+    /* Platform accent (indigo/purple) — used only on placement pages */
+    --color-primary: hsl(245, 58%, 51%);
+    --color-primary-light: hsl(245, 58%, 62%);
+    --color-primary-dark: hsl(245, 58%, 40%);
+    --color-primary-50: hsl(245, 58%, 96%);
+    --color-primary-100: hsl(245, 58%, 90%);
+    --color-primary-200: hsl(245, 58%, 80%);
+    --color-primary-700: hsl(245, 58%, 35%);
+    --color-primary-900: hsl(245, 58%, 20%);
+
+    /* Sidebar */
+    --color-sidebar: hsl(245, 40%, 16%);
+    --color-sidebar-hover: hsl(245, 40%, 22%);
+    --color-sidebar-active: hsl(245, 58%, 51%);
+
+    /* Spacing — strict scale from original design system */
+    --spacing-ds-xs: 8px;
+    --spacing-ds-sm: 16px;
+    --spacing-ds-md: 24px;
+    --spacing-ds-lg: 40px;
+    --spacing-ds-xl: 64px;
+
+    /* Radius — from original design system */
+    --radius-ds: 6px;
+}
